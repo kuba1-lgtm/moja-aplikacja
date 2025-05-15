@@ -20,6 +20,9 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--background);
       color: #333;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      height: 100vh;
     }
 
     .app {
@@ -29,11 +32,16 @@
       border-radius: 16px;
       padding: 16px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
     }
 
     h1 {
       font-size: 1.8rem;
       text-align: center;
+      margin-bottom: 0.5rem;
     }
 
     #clock {
@@ -41,6 +49,8 @@
       margin-bottom: 1rem;
       font-size: 1.2rem;
       color: #555;
+      font-weight: 600;
+      letter-spacing: 0.05em;
     }
 
     .form {
@@ -56,6 +66,11 @@
       border-radius: 12px;
       border: 1px solid #ddd;
       outline: none;
+      box-sizing: border-box;
+    }
+
+    input[type="text"], input[type="date"] {
+      width: 100%;
     }
 
     button {
@@ -63,12 +78,21 @@
       color: var(--white);
       font-weight: bold;
       border: none;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #0056b3;
     }
 
     ul {
       list-style: none;
       padding: 0;
       margin: 0;
+      flex-grow: 1;
+      overflow-y: auto;
+      max-height: 300px;
     }
 
     li {
@@ -79,12 +103,47 @@
       display: flex;
       justify-content: space-between;
       flex-wrap: wrap;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     li.completed {
       text-decoration: line-through;
       background: #d1e7dd;
       color: #666;
+    }
+
+    li > div:first-child {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    li > div:first-child strong {
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    li > div:first-child div {
+      font-size: 0.8rem;
+      color: #777;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+
+    li button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.3rem;
+      padding: 0 8px;
+      color: var(--primary);
+      transition: color 0.3s ease;
+    }
+
+    li button:hover {
+      color: #0056b3;
     }
 
     .filters {
@@ -101,10 +160,17 @@
       border-radius: 8px;
       background-color: #6c757d;
       color: white;
+      cursor: pointer;
+      border: none;
+      transition: background-color 0.3s ease;
     }
 
     .filters button.active {
       background-color: #28a745;
+    }
+
+    .filters button:hover:not(.active) {
+      background-color: #5a6268;
     }
 
     #calendarView {
@@ -118,11 +184,13 @@
       font-weight: bold;
       text-align: center;
       margin-bottom: 10px;
+      font-size: 1.1rem;
+      user-select: none;
     }
 
     #nextDays {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
       gap: 10px;
     }
 
@@ -133,13 +201,15 @@
       text-align: center;
       font-size: 0.9rem;
       white-space: pre-line;
+      user-select: none;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
     }
   </style>
 </head>
 <body>
   <div class="app">
     <h1>📘 Planer</h1>
-    <div id="clock"></div>
+    <div id="clock">🕒 --:--:--</div>
 
     <div id="calendarView">
       <div id="todayView"></div>
@@ -160,15 +230,22 @@
     <ul id="taskList"></ul>
 
     <div class="filters">
-      <button onclick="filterTasks('all')" class="active">Wszystkie</button>
-      <button onclick="filterTasks('active')">Aktywne</button>
-      <button onclick="filterTasks('completed')">Ukończone</button>
+      <button onclick="filterTasks('all', event)" class="active">Wszystkie</button>
+      <button onclick="filterTasks('active', event)">Aktywne</button>
+      <button onclick="filterTasks('completed', event)">Ukończone</button>
     </div>
   </div>
 
   <script>
     let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
     let currentFilter = "all";
+
+    // Ustaw minimalną datę na dzisiaj dla inputów date
+    const todayISO = new Date().toISOString().split('T')[0];
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById('taskDate').setAttribute('min', todayISO);
+      document.getElementById('filterDate').setAttribute('min', todayISO);
+    });
 
     function saveTasks() {
       localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -177,13 +254,19 @@
     function addTask() {
       const text = document.getElementById("taskInput").value.trim();
       const date = document.getElementById("taskDate").value;
-      if (text && date) {
-        tasks.push({ text, date, completed: false });
-        document.getElementById("taskInput").value = "";
-        document.getElementById("taskDate").value = "";
-        saveTasks();
-        renderTasks();
+      if (!text) {
+        alert("Wpisz treść zadania.");
+        return;
       }
+      if (!date) {
+        alert("Wybierz datę zadania.");
+        return;
+      }
+      tasks.push({ text, date, completed: false });
+      document.getElementById("taskInput").value = "";
+      document.getElementById("taskDate").value = "";
+      saveTasks();
+      renderTasks();
     }
 
     function toggleTask(index) {
@@ -193,12 +276,14 @@
     }
 
     function deleteTask(index) {
-      tasks.splice(index, 1);
-      saveTasks();
-      renderTasks();
+      if(confirm("Czy na pewno chcesz usunąć to zadanie?")) {
+        tasks.splice(index, 1);
+        saveTasks();
+        renderTasks();
+      }
     }
 
-    function filterTasks(filter) {
+    function filterTasks(filter, event) {
       currentFilter = filter;
       document.querySelectorAll(".filters button").forEach(btn => btn.classList.remove("active"));
       event.target.classList.add("active");
@@ -222,8 +307,8 @@
 
         li.innerHTML = `
           <div>
-            <div><strong>${task.text}</strong></div>
-            <div style="font-size: 0.8rem; color: #777;">📅 ${task.date}</div>
+            <strong title="${task.text}">${task.text}</strong>
+            <div>📅 ${task.date}</div>
           </div>
         `;
 
@@ -231,13 +316,13 @@
 
         const completeBtn = document.createElement("button");
         completeBtn.textContent = task.completed ? "↩️" : "✅";
+        completeBtn.title = task.completed ? "Oznacz jako nieukończone" : "Oznacz jako ukończone";
         completeBtn.onclick = () => toggleTask(index);
-        completeBtn.style.marginLeft = '5px';
 
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "🗑️";
+        deleteBtn.title = "Usuń zadanie";
         deleteBtn.onclick = () => deleteTask(index);
-        deleteBtn.style.marginLeft = '5px';
 
         btnGroup.appendChild(completeBtn);
         btnGroup.appendChild(deleteBtn);
